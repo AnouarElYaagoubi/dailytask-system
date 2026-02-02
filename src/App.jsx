@@ -392,7 +392,8 @@ const styles = {
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
   },
   container: {
-    maxWidth: 900,
+    width: "100%",
+    maxWidth: "1400px",
     margin: "0 auto",
     display: "grid",
     gap: 14,
