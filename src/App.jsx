@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 // -------------------- Helpers --------------------
-const STORAGE_KEY = "manhwa_system_v1";
+const STORAGE_KEY = "manhwa_system_v2_stats";
 
 function xpNeeded(level) {
-  // XP needed = 100 + (level - 1) * 50
   return 100 + (level - 1) * 50;
 }
 
@@ -13,7 +12,6 @@ function clamp(num, min, max) {
 }
 
 function formatDate(d = new Date()) {
-  // YYYY-MM-DD
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -39,6 +37,30 @@ function getXpRange(difficulty) {
   }
 }
 
+function getStatGain(difficulty) {
+  // how many stat points you get when completing a task
+  switch (difficulty) {
+    case "Easy":
+      return 1;
+    case "Medium":
+      return 2;
+    case "Hard":
+      return 3;
+    case "Boss":
+      return 5;
+    default:
+      return 1;
+  }
+}
+
+const STAT_INFO = {
+  STR: { label: "Strength", desc: "Gym / physical work" },
+  INT: { label: "Intelligence", desc: "Study / learning" },
+  DISC: { label: "Discipline", desc: "Habits / cleaning / routine" },
+  HP: { label: "Health", desc: "Sleep / water / food" },
+  SOC: { label: "Social", desc: "Networking / communication" },
+};
+
 // -------------------- App --------------------
 export default function App() {
   const today = useMemo(() => formatDate(), []);
@@ -48,6 +70,13 @@ export default function App() {
     level: 1,
     xp: 0,
     coins: 0,
+    stats: {
+      STR: 0,
+      INT: 0,
+      DISC: 0,
+      HP: 0,
+      SOC: 0,
+    },
   });
 
   const [tasks, setTasks] = useState([]);
@@ -57,6 +86,7 @@ export default function App() {
   const [difficulty, setDifficulty] = useState("Easy");
   const [xp, setXp] = useState(10);
   const [coins, setCoins] = useState(5);
+  const [statType, setStatType] = useState("DISC");
 
   // Load from localStorage
   useEffect(() => {
@@ -110,6 +140,8 @@ export default function App() {
       difficulty,
       xp: safeXp,
       coins: Math.max(0, Number(coins) || 0),
+      statType, // NEW
+      statGain: getStatGain(difficulty), // NEW
       completed: false,
       date: today,
     };
@@ -121,6 +153,7 @@ export default function App() {
     setDifficulty("Easy");
     setXp(10);
     setCoins(5);
+    setStatType("DISC");
   }
 
   function completeTask(taskId) {
@@ -129,16 +162,14 @@ export default function App() {
 
     // Mark completed
     setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId ? { ...t, completed: true } : t
-      )
+      prev.map((t) => (t.id === taskId ? { ...t, completed: true } : t))
     );
 
     // Give rewards
-    gainRewards(task.xp, task.coins);
+    gainRewards(task.xp, task.coins, task.statType, task.statGain);
   }
 
-  function gainRewards(gainXp, gainCoins) {
+  function gainRewards(gainXp, gainCoins, statType, statGain) {
     setUser((prev) => {
       let level = prev.level;
       let xp = prev.xp + gainXp;
@@ -150,19 +181,29 @@ export default function App() {
         level += 1;
       }
 
-      return { ...prev, level, xp, coins };
+      const stats = { ...prev.stats };
+      if (stats[statType] !== undefined) {
+        stats[statType] += statGain;
+      }
+
+      return { ...prev, level, xp, coins, stats };
     });
   }
 
   function resetToday() {
-    // deletes today's tasks only
     setTasks((prev) => prev.filter((t) => t.date !== today));
   }
 
   function wipeAll() {
     if (!confirm("Wipe everything? This deletes all progress.")) return;
     localStorage.removeItem(STORAGE_KEY);
-    setUser({ name: "Hunter", level: 1, xp: 0, coins: 0 });
+    setUser({
+      name: "Hunter",
+      level: 1,
+      xp: 0,
+      coins: 0,
+      stats: { STR: 0, INT: 0, DISC: 0, HP: 0, SOC: 0 },
+    });
     setTasks([]);
   }
 
@@ -201,6 +242,25 @@ export default function App() {
           </div>
         </div>
 
+        {/* Stats */}
+        <div style={styles.card}>
+          <div style={styles.cardTitle}>Character Stats</div>
+          <div style={styles.statsGrid}>
+            {Object.keys(user.stats).map((key) => (
+              <div key={key} style={styles.statBox}>
+                <div style={styles.statTop}>
+                  <span style={styles.statKey}>{key}</span>
+                  <span style={styles.statValue}>{user.stats[key]}</span>
+                </div>
+                <div style={styles.small}>
+                  <b>{STAT_INFO[key]?.label}</b>
+                  <div style={{ opacity: 0.75 }}>{STAT_INFO[key]?.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Add Task */}
         <div style={styles.card}>
           <div style={styles.cardTitle}>Create Daily Quest</div>
@@ -226,6 +286,18 @@ export default function App() {
                 <option>Boss</option>
               </select>
 
+              <select
+                style={styles.input}
+                value={statType}
+                onChange={(e) => setStatType(e.target.value)}
+              >
+                <option value="STR">STR</option>
+                <option value="INT">INT</option>
+                <option value="DISC">DISC</option>
+                <option value="HP">HP</option>
+                <option value="SOC">SOC</option>
+              </select>
+
               <input
                 style={styles.input}
                 type="number"
@@ -245,7 +317,8 @@ export default function App() {
             </div>
 
             <div style={styles.small}>
-              XP range for {difficulty}: {minXp}–{maxXp} | Rewards: Coins
+              XP range: {minXp}–{maxXp} | Stat reward: +{getStatGain(difficulty)}{" "}
+              {statType}
             </div>
 
             <button style={styles.button} onClick={addTask}>
@@ -272,7 +345,8 @@ export default function App() {
                       {t.completed ? "✅" : "🟦"} {t.title}
                     </div>
                     <div style={styles.small}>
-                      {t.difficulty} • +{t.xp} XP • +{t.coins} coins
+                      {t.difficulty} • +{t.xp} XP • +{t.coins} coins • +{t.statGain}{" "}
+                      {t.statType}
                     </div>
                   </div>
 
@@ -302,10 +376,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Footer */}
-        <div style={styles.footer}>
-          Tip: Make “Boss” quests for your biggest tasks.
-        </div>
+        <div style={styles.footer}>Tip: Make “Boss” quests for your biggest tasks.</div>
       </div>
     </div>
   );
@@ -321,7 +392,7 @@ const styles = {
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
   },
   container: {
-    maxWidth: 850,
+    maxWidth: 900,
     margin: "0 auto",
     display: "grid",
     gap: 14,
@@ -438,4 +509,33 @@ const styles = {
     opacity: 0.85,
   },
   footer: { textAlign: "center", opacity: 0.65, fontSize: 13, padding: 10 },
+
+  // Stats UI
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: 10,
+  },
+  statBox: {
+    padding: 14,
+    borderRadius: 14,
+    background: "rgba(0,0,0,0.25)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    display: "grid",
+    gap: 8,
+  },
+  statTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  statKey: {
+    fontWeight: 900,
+    letterSpacing: 1,
+    opacity: 0.9,
+  },
+  statValue: {
+    fontWeight: 900,
+    fontSize: 18,
+  },
 };
