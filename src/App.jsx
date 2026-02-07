@@ -62,22 +62,16 @@ const STAT_INFO = {
 };
 
 // -------------------- App --------------------
-export default function App() {
-  const today = useMemo(() => formatDate(), []);
+function App() {
+  return (
+    <div className="app">
+      {/* your existing content */}
+    </div>
+  );
+}
 
-  const [user, setUser] = useState({
-    name: "Hunter",
-    level: 1,
-    xp: 0,
-    coins: 0,
-    stats: {
-      STR: 0,
-      INT: 0,
-      DISC: 0,
-      HP: 0,
-      SOC: 0,
-    },
-  });
+export default App;
+
 
   const [tasks, setTasks] = useState([]);
 
@@ -380,7 +374,7 @@ export default function App() {
       </div>
     </div>
   );
-}
+
 
 // -------------------- Styles --------------------
 const styles = {
